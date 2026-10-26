@@ -4,7 +4,6 @@ import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
-import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
@@ -61,6 +60,8 @@ private const val PADDING_DP = 3f
 private class Seg(val ev: Ev, val from: Int, val to: Int)
 
 object WidgetRenderer {
+    private const val GOOGLE_CALENDAR = "com.google.android.calendar"
+
     private val WHITE = Color.parseColor("#EDEDED")
     private val GRAY = Color.parseColor("#BDBDBD")
     private val RED = Color.parseColor("#F2635B")
@@ -86,7 +87,6 @@ object WidgetRenderer {
         val list = Events.load(context, today, today.plusDays(6), settings.hiddenCalendars)
         val rv = RemoteViews(context.packageName, R.layout.widget)
         rv.setViewPadding(R.id.page, m.dp(PADDING_DP), m.dp(PADDING_DP), m.dp(PADDING_DP), 0)
-        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
 
         // 日付の行：押すと、その日を Google カレンダーなどで開く（権限がなければ設定画面）
         for (i in 0 until 7) {
@@ -99,21 +99,16 @@ object WidgetRenderer {
             }
             val h = HEAD_IDS[i]
             val day = if (date.dayOfMonth == 1) "${date.monthValue}/1" else "${date.dayOfMonth}"
-            rv.setTextViewText(h, "$day ${"日月火水木金土"[date.dayOfWeek.value % 7]}")
+            rv.setTextViewText(h, "$day(${"日月火水木金土"[date.dayOfWeek.value % 7]})")
             rv.setTextColor(h, color)
             rv.setTextViewTextSize(h, TypedValue.COMPLEX_UNIT_DIP, m.unit)
             rv.setViewPadding(h, 0, m.dp(1f), 0, m.dp(1f))
             // 今日は丸く（上下の余白は押す場所のため残し、背景は文字のまわりだけ）
             rv.setInt(h, "setBackgroundResource", if (i == 0) R.drawable.today_bg else 0)
-            val click = if (permitted) {
-                val millis = date.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                val uri = ContentUris.appendId(CalendarContract.CONTENT_URI.buildUpon().appendPath("time"), millis).build()
-                PendingIntent.getActivity(context, 0, Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
-            } else {
-                PendingIntent.getActivity(context, 1, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
-            }
-            rv.setOnClickPendingIntent(h, click)
         }
+
+        // ウィジェットを押すと Google カレンダーのアプリを開く（入っていなければ今日の画面。権限がなければ設定画面）
+        rv.setOnClickPendingIntent(R.id.page, openCalendarIntent(context, permitted))
 
         // 予定の段。描き直しでも使い回されるよう、先に removeAllViews を置く（番号付きで入れる決まり）
         rv.removeAllViews(R.id.lanes)
@@ -146,7 +141,6 @@ object WidgetRenderer {
         row.removeAllViews(R.id.lane)
         var pos = 0
         var n = 0
-        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         for (seg in lane) {
             if (seg.from > pos) row.addChild(R.id.lane, RemoteViews(context.packageName, GAP_LAYOUTS[seg.from - pos - 1]), n++)
             val ev = seg.ev
@@ -155,12 +149,6 @@ object WidgetRenderer {
             chip.setTextViewTextSize(R.id.seg, TypedValue.COMPLEX_UNIT_DIP, m.unit)
             chip.setTextColor(R.id.seg, if (isLight(ev.color)) DARK else Color.WHITE)
             chip.setBg(R.id.seg, ev.color)
-            // 押すと、その予定を開く
-            val view = Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, ev.id))
-                .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, ev.begin)
-                .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, ev.end)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            chip.setOnClickPendingIntent(R.id.seg, PendingIntent.getActivity(context, 2, view, flags))
             row.addChild(R.id.lane, chip, n++)
             pos = seg.to + 1
         }
@@ -179,6 +167,16 @@ object WidgetRenderer {
         cell.setTextViewText(R.id.seg, text)
         row.addChild(R.id.lane, cell, 0)
         return row
+    }
+
+    private fun openCalendarIntent(context: Context, permitted: Boolean): PendingIntent {
+        val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        if (!permitted) {
+            return PendingIntent.getActivity(context, 1, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
+        }
+        val launch = context.packageManager.getLaunchIntentForPackage(GOOGLE_CALENDAR)
+            ?: Intent(Intent.ACTION_VIEW, CalendarContract.CONTENT_URI.buildUpon().appendPath("time").build())
+        return PendingIntent.getActivity(context, 0, launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), flags)
     }
 
     private fun RemoteViews.addChild(parent: Int, child: RemoteViews, stableId: Int = 0) {

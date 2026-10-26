@@ -54,6 +54,26 @@ class MainActivity : Activity() {
         setPadding(0, dp(6), 0, dp(6))
     }
 
+    /** タイトルを押すと開閉する欄。開いているかは再描画しても保つ。 */
+    private fun collapsible(title: String, key: String, content: LinearLayout) {
+        val toggle = text("", 17f)
+        toggle.setPadding(0, dp(20), 0, dp(10))
+        fun apply() {
+            val open = key in openSections
+            content.visibility = if (open) View.VISIBLE else View.GONE
+            toggle.text = (if (open) "▼ " else "▶ ") + title
+        }
+        toggle.setOnClickListener {
+            if (!openSections.add(key)) openSections.remove(key)
+            apply()
+        }
+        apply()
+        body.addView(toggle)
+        body.addView(content)
+    }
+
+    private val openSections = mutableSetOf<String>()
+
     private fun build() {
         body.removeAllViews()
         body.addView(text("たっぴぃずカレンダー", 22f))
@@ -103,8 +123,6 @@ class MainActivity : Activity() {
             .joinToString { "${WidgetRenderer.reportedHeight(manager, it)}dp" }
         if (heights.isNotEmpty()) body.addView(text("ウィジェットの高さ（ホーム画面の報告）: $heights", 12f, Color.GRAY))
 
-        buildTasksSection()
-
         body.addView(Button(this).apply {
             text = "完了"
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(24) }
@@ -112,9 +130,11 @@ class MainActivity : Activity() {
             setOnClickListener { WidgetRenderer.updateAll(this@MainActivity); finish() }
         })
 
-        // 表示するカレンダー（いちばん下。最初は閉じておく）
+        // いちばん下：Google タスクと表示するカレンダー（最初は閉じておく）
+        buildTasksSection()
+
         if (Events.hasPermission(this)) {
-            val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+            val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val hidden = settings.hiddenCalendars.toMutableSet()
             val calendars = Events.calendars(this)
             if (calendars.isEmpty()) list.addView(text("カレンダーが見つかりません", 14f, Color.GRAY))
@@ -130,15 +150,7 @@ class MainActivity : Activity() {
                     }
                 })
             }
-            val toggle = text("▶ 表示するカレンダー", 17f)
-            toggle.setPadding(0, dp(20), 0, dp(10))
-            toggle.setOnClickListener {
-                val open = list.visibility != View.VISIBLE
-                list.visibility = if (open) View.VISIBLE else View.GONE
-                toggle.text = if (open) "▼ 表示するカレンダー" else "▶ 表示するカレンダー"
-            }
-            body.addView(toggle)
-            body.addView(list)
+            collapsible("表示するカレンダー", "calendars", list)
         }
     }
 
@@ -148,39 +160,43 @@ class MainActivity : Activity() {
     private var pendingAccount = ""
 
     private fun buildTasksSection() {
-        body.addView(text("Google タスク", 17f))
-        body.addView(text("Google カレンダーアプリに出るタスクも、ウィジェットに出せます（読み取りだけ。通信は数時間おきと、この画面で「今すぐ更新」を押したときだけです）。アカウントは複数連携できます。", 13f, Color.GRAY))
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(text("Google カレンダーアプリに出るタスクも、ウィジェットに出せます（読み取りだけ。通信は数時間おきと「今すぐ更新」のときだけ。アカウントは複数連携できます）。", 13f, Color.GRAY))
         val accounts = settings.taskAccounts
         for (account in accounts) {
             val error = settings.tasksError(account)
-            body.addView(text(if (account.isEmpty()) "最初に連携したアカウント" else account, 15f))
-            body.addView(text(if (error.isEmpty()) "連携中。${settings.tasksSummary(account).ifEmpty { "まだ取得していません" }}" else error, 13f, if (error.isEmpty()) Color.GRAY else Color.RED))
-            body.addView(Button(this).apply {
-                text = "連携をやめる"
-                setOnClickListener {
-                    settings.removeTaskAccount(account)
-                    WidgetRenderer.updateAll(this@MainActivity)
-                    build()
-                }
+            box.addView(text(if (account.isEmpty()) "最初に連携したアカウント" else account, 15f))
+            box.addView(text(if (error.isEmpty()) settings.tasksSummary(account).ifEmpty { "まだ取得していません" } else error, 13f, if (error.isEmpty()) Color.GRAY else Color.RED))
+            box.addView(smallButton("連携をやめる") {
+                settings.removeTaskAccount(account)
+                WidgetRenderer.updateAll(this@MainActivity)
+                build()
             })
         }
-        if (accounts.isNotEmpty()) {
-            body.addView(Button(this).apply {
-                text = "今すぐ更新"
-                setOnClickListener { refreshTasks() }
-            })
-        }
-        body.addView(Button(this).apply {
-            text = if (accounts.isEmpty()) "Google タスクと連携する" else "別のアカウントも連携する"
-            setOnClickListener {
-                startActivityForResult(
-                    AccountPicker.newChooseAccountIntent(
-                        AccountPicker.AccountChooserOptions.Builder().setAllowableAccountsTypes(listOf("com.google")).build(),
-                    ),
-                    REQUEST_PICK,
-                )
-            }
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        if (accounts.isNotEmpty()) row.addView(smallButton("今すぐ更新") { refreshTasks() })
+        row.addView(smallButton(if (accounts.isEmpty()) "連携する" else "別のアカウントを連携") {
+            startActivityForResult(
+                AccountPicker.newChooseAccountIntent(
+                    AccountPicker.AccountChooserOptions.Builder().setAllowableAccountsTypes(listOf("com.google")).build(),
+                ),
+                REQUEST_PICK,
+            )
         })
+        box.addView(row)
+        val failed = accounts.any { settings.tasksError(it).isNotEmpty() }
+        val state = when {
+            accounts.isEmpty() -> "未連携"
+            failed -> "エラーあり"
+            else -> "${accounts.size}件連携中"
+        }
+        collapsible("Google タスク（$state）", "tasks", box)
+    }
+
+    private fun smallButton(label: String, onClick: () -> Unit) = Button(this).apply {
+        text = label
+        isAllCaps = false
+        setOnClickListener { onClick() }
     }
 
     /** 読み取りの許可を求める。まだ許可していなければ Google の許可画面が出る。 */

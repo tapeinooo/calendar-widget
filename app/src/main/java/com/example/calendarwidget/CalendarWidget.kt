@@ -93,6 +93,9 @@ private const val FORWARD_WEEKS = 6
 private const val PAGE_COUNT = BACK_WEEKS + FORWARD_WEEKS + 1
 private const val MAX_CHIPS = 6
 
+/** これより低いウィジェット（縦1マスなど）ではタイトルを出さない。 */
+private const val TITLE_MIN_HEIGHT_DP = 100f
+
 object WidgetRenderer {
     private val WHITE = Color.parseColor("#EDEDED")
     private val GRAY = Color.parseColor("#BDBDBD")
@@ -140,6 +143,8 @@ object WidgetRenderer {
         rv.setDisplayedChild(R.id.flipper, offset + BACK_WEEKS)
         // 日の並びは、タイトルの下で、左右に矢印の分をあけて置く
         rv.setViewPadding(R.id.days_frame, m.dp(ARROW_WIDTH_DP), m.titleHeight(), m.dp(ARROW_WIDTH_DP), m.dp(PADDING_DP))
+        // 縦1マスのときは、場所をあけるためタイトルを出さない
+        rv.setViewVisibility(R.id.title, if (m.showTitle) View.VISIBLE else View.GONE)
         rv.setViewVisibility(R.id.message, View.GONE)
         rv.setViewVisibility(R.id.days_frame, View.VISIBLE)
         rv.setViewVisibility(R.id.zones, View.VISIBLE)
@@ -319,12 +324,12 @@ object WidgetRenderer {
      * 1列の幅に収まり、縦に予定が何件入るかも決まる。設定の％を掛ける。
      * 大きさは dp で指定するので、端末の文字サイズ設定には左右されない。
      */
-    class Metrics(val unit: Float, val density: Float, val chips: Int) {
+    class Metrics(val unit: Float, val density: Float, val chips: Int, val showTitle: Boolean) {
         fun px(factor: Float): Int = (unit * factor * density).toInt().coerceAtLeast(1)
         fun dp(dp: Float): Int = (dp * density).toInt()
 
         /** 日の並びの上の余白（タイトルの行の分）。 */
-        fun titleHeight(): Int = dp(PADDING_DP / 2) + px(1.0f * 1.4f + 0.2f)
+        fun titleHeight(): Int = if (showTitle) dp(PADDING_DP / 2) + px(1.0f * 1.4f + 0.2f) else dp(PADDING_DP / 2)
     }
 
     private fun metrics(context: Context, manager: AppWidgetManager, id: Int, settings: Settings): Metrics {
@@ -336,10 +341,11 @@ object WidgetRenderer {
         val byWidth = columnWidth / 4.4f
         val unit = byWidth.coerceIn(6f, 24f) * settings.textScale / 100f
         // 日の並びに使える高さ：全体の高さ − 上下の余白 − タイトル − 日付の行
-        val titleAndHead = unit * (1.0f * 1.4f + 0.2f) + unit * 1.4f
+        val showTitle = height >= TITLE_MIN_HEIGHT_DP
+        val titleAndHead = (if (showTitle) unit * (1.0f * 1.4f + 0.2f) else 0f) + unit * 1.9f
         val chipHeight = unit * 0.85f * 1.5f + 1f
-        val chips = ((height - PADDING_DP * 2f - titleAndHead) / chipHeight).toInt().coerceIn(1, MAX_CHIPS)
-        return Metrics(unit, context.resources.displayMetrics.density, chips)
+        val chips = ((height - PADDING_DP * (if (showTitle) 2f else 2.5f) - titleAndHead) / chipHeight).toInt().coerceIn(1, MAX_CHIPS)
+        return Metrics(unit, context.resources.displayMetrics.density, chips, showTitle)
     }
 
     private fun ids(context: Context, manager: AppWidgetManager): IntArray =

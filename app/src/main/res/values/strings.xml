@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">たっぴぃずカレンダー</string>
+    <string name="widget_name">たっぴぃずカレンダー</string>
+    <string name="widget_description">今日からの1週間を1行に並べて予定を表示</string>
+</resources>

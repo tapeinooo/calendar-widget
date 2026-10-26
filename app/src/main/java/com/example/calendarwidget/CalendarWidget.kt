@@ -131,7 +131,8 @@ object WidgetRenderer {
             } else if (ev.allDay) {
                 // 終日：カレンダーの色で塗る
                 rv.setTextViewText(id, ev.title)
-                rv.setTextColor(id, Color.WHITE)
+                // 明るい色の上では白い文字が読めないので、明るさで文字を黒か白にする
+                rv.setTextColor(id, if (isLight(ev.color)) Color.parseColor("#202124") else Color.WHITE)
                 rv.setBg(id, ev.color)
             } else {
                 // 時間のある予定：色の点＋タイトル（Google カレンダーの月表示と同じ）
@@ -155,6 +156,9 @@ object WidgetRenderer {
         rv.setOnClickPendingIntent(R.id.day, click)
         return rv
     }
+
+    private fun isLight(color: Int): Boolean =
+        (0.299 * Color.red(color) + 0.587 * Color.green(color) + 0.114 * Color.blue(color)) > 150
 
     /** 色で塗る（Android 12 以降は角を丸くしたまま色を替える）。 */
     private fun RemoteViews.setBg(viewId: Int, color: Int) {

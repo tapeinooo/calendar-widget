@@ -97,6 +97,25 @@ class MainActivity : Activity() {
             })
         })
 
+        body.addView(text("予定の段数", 17f))
+        body.addView(text("「自動」で予定が少なすぎるときは、段数を決めてください（多すぎるとウィジェットの下が切れます）。", 13f, Color.GRAY))
+        body.addView(android.widget.RadioGroup(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            for ((value, label) in listOf(0 to "自動", 1 to "1", 2 to "2", 3 to "3", 4 to "4", 5 to "5")) {
+                addView(android.widget.RadioButton(this@MainActivity).apply {
+                    text = label
+                    id = 100 + value
+                    isChecked = settings.laneCount == value
+                    setTextColor(Color.parseColor("#202124"))
+                    setOnClickListener { settings.laneCount = value; WidgetRenderer.updateAll(this@MainActivity) }
+                })
+            }
+        })
+        val manager = AppWidgetManager.getInstance(this)
+        val heights = manager.getAppWidgetIds(android.content.ComponentName(this, CalendarWidgetReceiver::class.java))
+            .joinToString { "${WidgetRenderer.reportedHeight(manager, it)}dp" }
+        if (heights.isNotEmpty()) body.addView(text("ウィジェットの高さ（ホーム画面の報告）: $heights", 12f, Color.GRAY))
+
         body.addView(Button(this).apply {
             text = "完了"
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(24) }

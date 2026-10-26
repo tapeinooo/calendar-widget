@@ -209,27 +209,32 @@ object WidgetRenderer {
     }
 
     /**
-     * 文字の大きさの決め方。1 単位＝文字の大きさ（dp）。
-     * ウィジェットの高さに日付の行と予定2段が入る大きさを基本にし、設定の％を掛ける
-     * （幅には合わせない：予定の文字は右が切れてよい）。予定の段の高さは文字の大きさに合わせ、
-     * 高さに入る段の数だけ出す。大きさは dp で指定するので、端末の文字サイズ設定には左右されない。
+     * 文字の大きさの決め方。1 単位＝文字の大きさ（dp）。標準は 10dp で、設定の％を掛ける
+     * （幅や高さには合わせない：予定の文字は右が切れてよい）。予定の段の高さは文字の大きさに合わせ、
+     * 高さに入る段の数だけ出す（設定で段数を決めることもできる）。
+     * 大きさは dp で指定するので、端末の文字サイズ設定には左右されない。
      */
     class Metrics(val unit: Float, val density: Float, val lanes: Int) {
         fun dp(dp: Float): Int = (dp * density).toInt()
     }
 
+    /** ホーム画面が報告するウィジェットの高さ（dp）。 */
+    fun reportedHeight(manager: AppWidgetManager, id: Int): Int =
+        manager.getAppWidgetOptions(id).getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT)
+
     private fun metrics(manager: AppWidgetManager, id: Int, settings: Settings, context: Context): Metrics {
-        val options = manager.getAppWidgetOptions(id)
-        // 縦向きのときの高さ（dp）
-        // ホーム画面は上下に余白を取ることがあるので、使える高さは報告された高さより少なく見る
-        val height = (options.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT).takeIf { it > 0 } ?: 70) - 14
-        val base = ((height - PADDING_DP * 2 - 7f) / (HEAD_FACTOR + 2 * CHIP_FACTOR)).coerceIn(8f, 20f)
-        val unit = base * settings.textScale / 100f
-        val lanes = ((height - PADDING_DP * 2 - unit * HEAD_FACTOR) / (unit * CHIP_FACTOR + 3f)).toInt().coerceAtLeast(1)
+        // 報告される高さは、実際に使える高さより小さいことがある（スマホで確認）ので、少し足して見る
+        val height = (reportedHeight(manager, id).takeIf { it > 0 } ?: 70) + HEIGHT_BONUS
+        val unit = BASE_UNIT * settings.textScale / 100f
+        val auto = ((height - PADDING_DP * 2 - unit * HEAD_FACTOR) / (unit * CHIP_FACTOR + 3f)).toInt()
+        val lanes = (settings.laneCount.takeIf { it > 0 } ?: auto).coerceAtLeast(1)
         return Metrics(unit, context.resources.displayMetrics.density, lanes)
     }
 
+    private const val BASE_UNIT = 10f
+    private const val HEIGHT_BONUS = 10
+
     /** 日付の行・予定1段の高さ（文字の大きさの何倍か。余白を含む）。 */
     private const val HEAD_FACTOR = 1.5f
-    private const val CHIP_FACTOR = 1.3f
+    private const val CHIP_FACTOR = 1.5f
 }

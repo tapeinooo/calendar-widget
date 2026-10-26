@@ -1,5 +1,6 @@
 package com.example.calendarwidget
 
+import android.accounts.Account
 import android.content.Context
 import com.google.android.gms.auth.api.identity.AuthorizationRequest
 import com.google.android.gms.auth.api.identity.AuthorizationResult
@@ -24,16 +25,18 @@ object Tasks {
     private const val API = "https://tasks.googleapis.com/tasks/v1"
     private val COLOR = 0xFF6C8DDA.toInt()
 
-    fun authorizationRequest(): AuthorizationRequest =
-        AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(SCOPE))).build()
+    /** account が空なら、Google が選んだアカウントで（古い版の連携）。 */
+    fun authorizationRequest(account: String): AuthorizationRequest =
+        AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(SCOPE))).also {
+            if (account.isNotEmpty()) it.setAccount(Account(account, "com.google"))
+        }.build()
 
-    /** 保存してあるタスクのうち、from〜to（含む）に期限があるものを予定の形で返す。 */
+    /** 保存してあるタスクのうち、from〜to（含む）に出すものを予定の形で返す（全アカウントぶん）。 */
     fun load(context: Context, from: LocalDate, to: LocalDate): List<Ev> {
         val settings = Settings(context)
-        if (!settings.tasksEnabled) return emptyList()
         val out = ArrayList<Ev>()
-        runCatching {
-            val array = JSONArray(settings.tasksJson)
+        for (account in settings.taskAccounts) runCatching {
+            val array = JSONArray(settings.tasksJson(account))
             for (i in 0 until array.length()) {
                 val o = array.getJSONObject(i)
                 val due = LocalDate.parse(o.getString("due"))
@@ -48,28 +51,33 @@ object Tasks {
     }
 
     /**
-     * タスクを取得して保存する（バックグラウンドで呼ぶ）。許可の画面が必要なとき（まだ許可していない・取り消された）は、
-     * 保存してあるものは消さずに、設定画面に出すエラーだけ残す。
+     * 連携しているすべてのアカウントのタスクを取得して保存する（バックグラウンドで呼ぶ）。
+     * 許可の画面が必要なとき（取り消された・期限切れ）は、保存してあるものは消さずに、
+     * 設定画面に出すエラーだけ残す。アカウントごとに独立して行う。
      */
-    fun refresh(context: Context): Boolean {
+    fun refresh(context: Context) {
         val settings = Settings(context)
-        if (!settings.tasksEnabled) return true
+        for (account in settings.taskAccounts) refresh(context, account)
+    }
+
+    fun refresh(context: Context, account: String): Boolean {
+        val settings = Settings(context)
         return try {
             val result: AuthorizationResult = com.google.android.gms.tasks.Tasks.await(
-                Identity.getAuthorizationClient(context).authorize(authorizationRequest()), 30, TimeUnit.SECONDS,
+                Identity.getAuthorizationClient(context).authorize(authorizationRequest(account)), 30, TimeUnit.SECONDS,
             )
             val token = result.accessToken
             if (result.hasResolution() || token == null) {
-                settings.tasksError = "許可が必要です。設定画面で「Google タスクと連携する」を押してください。"
+                settings.setTasksError(account, "許可が必要です。いったん連携をやめて、もう一度連携してください。")
                 return false
             }
             val fetched = fetch(token)
-            settings.tasksJson = fetched.tasks.toString()
-            settings.tasksSummary = fetched.summary
-            settings.tasksError = ""
+            settings.setTasksJson(account, fetched.tasks.toString())
+            settings.setTasksSummary(account, fetched.summary)
+            settings.setTasksError(account, "")
             true
         } catch (e: Exception) {
-            settings.tasksError = "取得できませんでした：${e.message ?: e.javaClass.simpleName}"
+            settings.setTasksError(account, "取得できませんでした：${e.message ?: e.javaClass.simpleName}")
             false
         }
     }

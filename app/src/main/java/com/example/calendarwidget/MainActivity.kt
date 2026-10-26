@@ -10,7 +10,9 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.accounts.AccountManager
 import com.google.android.gms.auth.api.identity.Identity
+import com.google.android.gms.common.AccountPicker
 import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -142,47 +144,60 @@ class MainActivity : Activity() {
 
     // ---- Google タスク ----
 
+    /** 連携の途中のアカウント（許可の画面から戻ってきたときに使う）。 */
+    private var pendingAccount = ""
+
     private fun buildTasksSection() {
         body.addView(text("Google タスク", 17f))
-        if (!settings.tasksEnabled) {
-            body.addView(text("Google カレンダーアプリに出るタスクも、ウィジェットに出せます（読み取りだけ。通信は数時間おきと、この画面で「今すぐ更新」を押したときだけです）。", 13f, Color.GRAY))
-            body.addView(Button(this).apply {
-                text = "Google タスクと連携する"
-                setOnClickListener { authorizeTasks() }
-            })
-        } else {
-            val error = settings.tasksError
-            body.addView(text(if (error.isEmpty()) "連携中。${settings.tasksSummary.ifEmpty { "まだ取得していません" }}" else error, 13f, if (error.isEmpty()) Color.GRAY else Color.RED))
-            body.addView(Button(this).apply {
-                text = "今すぐ更新"
-                setOnClickListener { refreshTasks() }
-            })
+        body.addView(text("Google カレンダーアプリに出るタスクも、ウィジェットに出せます（読み取りだけ。通信は数時間おきと、この画面で「今すぐ更新」を押したときだけです）。アカウントは複数連携できます。", 13f, Color.GRAY))
+        val accounts = settings.taskAccounts
+        for (account in accounts) {
+            val error = settings.tasksError(account)
+            body.addView(text(if (account.isEmpty()) "最初に連携したアカウント" else account, 15f))
+            body.addView(text(if (error.isEmpty()) "連携中。${settings.tasksSummary(account).ifEmpty { "まだ取得していません" }}" else error, 13f, if (error.isEmpty()) Color.GRAY else Color.RED))
             body.addView(Button(this).apply {
                 text = "連携をやめる"
                 setOnClickListener {
-                    settings.tasksEnabled = false
-                    settings.tasksJson = "[]"
-                    settings.tasksError = ""
+                    settings.removeTaskAccount(account)
                     WidgetRenderer.updateAll(this@MainActivity)
                     build()
                 }
             })
         }
+        if (accounts.isNotEmpty()) {
+            body.addView(Button(this).apply {
+                text = "今すぐ更新"
+                setOnClickListener { refreshTasks() }
+            })
+        }
+        body.addView(Button(this).apply {
+            text = if (accounts.isEmpty()) "Google タスクと連携する" else "別のアカウントも連携する"
+            setOnClickListener {
+                startActivityForResult(
+                    AccountPicker.newChooseAccountIntent(
+                        AccountPicker.AccountChooserOptions.Builder().setAllowableAccountsTypes(listOf("com.google")).build(),
+                    ),
+                    REQUEST_PICK,
+                )
+            }
+        })
     }
 
     /** 読み取りの許可を求める。まだ許可していなければ Google の許可画面が出る。 */
-    private fun authorizeTasks() {
-        Identity.getAuthorizationClient(this).authorize(Tasks.authorizationRequest())
+    private fun authorizeTasks(account: String) {
+        pendingAccount = account
+        Identity.getAuthorizationClient(this).authorize(Tasks.authorizationRequest(account))
             .addOnSuccessListener { result ->
                 val pending = result.pendingIntent
                 if (result.hasResolution() && pending != null) {
                     startIntentSenderForResult(pending.intentSender, REQUEST_TASKS, null, 0, 0, 0)
                 } else {
-                    onTasksAuthorized()
+                    onTasksAuthorized(account)
                 }
             }
             .addOnFailureListener { e ->
-                settings.tasksError = "許可できませんでした：${e.message ?: e.javaClass.simpleName}"
+                settings.setTasksError(account, "許可できませんでした：${e.message ?: e.javaClass.simpleName}")
+                if (account !in settings.taskAccounts) settings.taskAccounts = settings.taskAccounts + account
                 build()
             }
     }
@@ -190,12 +205,16 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_TASKS && resultCode == RESULT_OK) onTasksAuthorized()
+        if (resultCode != RESULT_OK) return
+        when (requestCode) {
+            REQUEST_PICK -> data?.getStringExtra(AccountManager.KEY_ACCOUNT_NAME)?.let { authorizeTasks(it) }
+            REQUEST_TASKS -> onTasksAuthorized(pendingAccount)
+        }
     }
 
-    private fun onTasksAuthorized() {
-        settings.tasksEnabled = true
-        settings.tasksError = ""
+    private fun onTasksAuthorized(account: String) {
+        if (account !in settings.taskAccounts) settings.taskAccounts = settings.taskAccounts + account
+        settings.setTasksError(account, "")
         refreshTasks()
     }
 
@@ -212,5 +231,6 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQUEST_TASKS = 7
+        private const val REQUEST_PICK = 8
     }
 }

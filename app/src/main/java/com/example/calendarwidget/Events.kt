@@ -15,6 +15,15 @@ class Ev(val title: String, val color: Int, val allDay: Boolean, val startMillis
 class CalendarInfo(val id: Long, val name: String, val account: String, val color: Int)
 
 object Events {
+    /**
+     * Google カレンダーで「予定の色」を選んだとき、端末の予定データには昔の配色で入っている。
+     * Google カレンダーアプリは同じ色の名前を新しい配色で出すので、それに合わせる。
+     */
+    private val GOOGLE_EVENT_COLORS = mapOf(
+        "1" to 0x7986CB, "2" to 0x33B679, "3" to 0x8E24AA, "4" to 0xE67C73, "5" to 0xF6BF26, "6" to 0xF4511E,
+        "7" to 0x039BE5, "8" to 0x616161, "9" to 0x3F51B5, "10" to 0x0B8043, "11" to 0xD50000,
+    ).mapValues { it.value or (0xFF shl 24) }
+
     fun hasPermission(context: Context) =
         context.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
@@ -56,7 +65,7 @@ object Events {
                     CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN, CalendarContract.Instances.END,
                     CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.EVENT_COLOR,
                     CalendarContract.Instances.CALENDAR_COLOR, CalendarContract.Instances.CALENDAR_ID,
-                    CalendarContract.Instances.SELF_ATTENDEE_STATUS,
+                    CalendarContract.Instances.SELF_ATTENDEE_STATUS, CalendarContract.Instances.EVENT_COLOR_KEY,
                 ),
                 "${CalendarContract.Instances.VISIBLE}=1", null, CalendarContract.Instances.BEGIN,
             )?.use { c ->
@@ -75,7 +84,7 @@ object Events {
                         startDate = Instant.ofEpochMilli(b).atZone(zone).toLocalDate()
                         lastDate = Instant.ofEpochMilli(maxOf(e - 1, b)).atZone(zone).toLocalDate()
                     }
-                    val color = c.getInt(4).takeIf { it != 0 } ?: c.getInt(5)
+                    val color = GOOGLE_EVENT_COLORS[c.getString(8)] ?: c.getInt(4).takeIf { it != 0 } ?: c.getInt(5)
                     val ev = Ev(c.getString(0)?.takeIf { it.isNotBlank() } ?: "（タイトルなし）", color or (0xFF shl 24), allDay, b)
                     var d = maxOf(startDate, from)
                     val stop = minOf(lastDate, to)

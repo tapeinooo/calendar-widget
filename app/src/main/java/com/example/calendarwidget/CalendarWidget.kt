@@ -98,7 +98,8 @@ object WidgetRenderer {
                 else -> WHITE
             }
             val h = HEAD_IDS[i]
-            rv.setTextViewText(h, if (date.dayOfMonth == 1) "${date.monthValue}/1" else "${date.dayOfMonth}")
+            val day = if (date.dayOfMonth == 1) "${date.monthValue}/1" else "${date.dayOfMonth}"
+            rv.setTextViewText(h, "$day ${"日月火水木金土"[date.dayOfWeek.value % 7]}")
             rv.setTextColor(h, color)
             rv.setTextViewTextSize(h, TypedValue.COMPLEX_UNIT_DIP, m.unit)
             rv.setViewPadding(h, 0, m.dp(1f), 0, m.dp(1f))
@@ -117,17 +118,10 @@ object WidgetRenderer {
         // 予定の段。描き直しでも使い回されるよう、先に removeAllViews を置く（番号付きで入れる決まり）
         rv.removeAllViews(R.id.lanes)
         val lanes = layoutLanes(list, today)
-        val visible = m.lanes.coerceAtLeast(1)
-        // 段が1つしか入らないときは、「+件数」より予定そのものを出す
-        val overflow = lanes.size > visible && visible > 1
-        val shown = if (overflow) visible - 1 else minOf(lanes.size, visible)
-        for (li in 0 until shown) {
-            rv.addChild(R.id.lanes, laneView(context, lanes[li], li, m, today))
-        }
-        if (overflow || (!permitted && lanes.isEmpty())) {
-            // 入りきらない予定は、日ごとの「+件数」にして最後の段に出す（権限がなければ案内）
-            rv.addChild(R.id.lanes, moreView(context, lanes, shown, m, if (permitted) null else "要許可"), shown)
-        }
+        // 入る段数のほかに、まだ予定があるときは次の段も（見切れてもよいので）出し、予定が続いていると分かるようにする
+        val shown = minOf(lanes.size, m.lanes + 1)
+        for (li in 0 until shown) rv.addChild(R.id.lanes, laneView(context, lanes[li], m), li)
+        if (!permitted && lanes.isEmpty()) rv.addChild(R.id.lanes, noticeView(context, "要許可", m), 0)
         manager.updateAppWidget(id, rv)
     }
 
@@ -147,7 +141,7 @@ object WidgetRenderer {
         return lanes.map { l -> l.sortedBy { it.from } }
     }
 
-    private fun laneView(context: Context, lane: List<Seg>, index: Int, m: Metrics, today: LocalDate): RemoteViews {
+    private fun laneView(context: Context, lane: List<Seg>, m: Metrics): RemoteViews {
         val row = RemoteViews(context.packageName, R.layout.lane)
         row.removeAllViews(R.id.lane)
         var pos = 0
@@ -174,20 +168,16 @@ object WidgetRenderer {
         return row
     }
 
-    /** 入りきらない予定の件数を日ごとに出す段（lanes の from 段目から後ろにある予定の数）。 */
-    private fun moreView(context: Context, lanes: List<List<Seg>>, from: Int, m: Metrics, notice: String?): RemoteViews {
+    /** 予定の権限がないときの案内（今日の列）。 */
+    private fun noticeView(context: Context, text: String, m: Metrics): RemoteViews {
         val row = RemoteViews(context.packageName, R.layout.lane)
         row.removeAllViews(R.id.lane)
-        val counts = IntArray(7)
-        for (li in from until lanes.size) for (seg in lanes[li]) for (d in seg.from..seg.to) counts[d]++
-        for (d in 0 until 7) {
-            val cell = RemoteViews(context.packageName, R.layout.seg_e1)
-            cell.setTextViewTextSize(R.id.seg, TypedValue.COMPLEX_UNIT_DIP, m.unit)
-            cell.setTextColor(R.id.seg, GRAY)
-            cell.setInt(R.id.seg, "setBackgroundResource", 0)
-            cell.setTextViewText(R.id.seg, if (notice != null && d == 0) notice else if (counts[d] > 0) "+${counts[d]}" else "")
-            row.addChild(R.id.lane, cell, d)
-        }
+        val cell = RemoteViews(context.packageName, R.layout.seg_e2)
+        cell.setTextViewTextSize(R.id.seg, TypedValue.COMPLEX_UNIT_DIP, m.unit)
+        cell.setTextColor(R.id.seg, GRAY)
+        cell.setInt(R.id.seg, "setBackgroundResource", 0)
+        cell.setTextViewText(R.id.seg, text)
+        row.addChild(R.id.lane, cell, 0)
         return row
     }
 
@@ -226,7 +216,7 @@ object WidgetRenderer {
         // 報告される高さは、実際に使える高さより小さいことがある（スマホで確認）ので、少し足して見る
         val height = (reportedHeight(manager, id).takeIf { it > 0 } ?: 70) + HEIGHT_BONUS
         val unit = BASE_UNIT * settings.textScale / 100f
-        val auto = ((height - PADDING_DP * 2 - unit * HEAD_FACTOR) / (unit * CHIP_FACTOR + 3f)).toInt()
+        val auto = ((height - PADDING_DP * 2 - unit * HEAD_FACTOR) / (unit * CHIP_FACTOR + 1.5f)).toInt()
         val lanes = (settings.laneCount.takeIf { it > 0 } ?: auto).coerceAtLeast(1)
         return Metrics(unit, context.resources.displayMetrics.density, lanes)
     }
@@ -236,5 +226,5 @@ object WidgetRenderer {
 
     /** 日付の行・予定1段の高さ（文字の大きさの何倍か。余白を含む）。 */
     private const val HEAD_FACTOR = 1.5f
-    private const val CHIP_FACTOR = 1.5f
+    private const val CHIP_FACTOR = 1.25f
 }

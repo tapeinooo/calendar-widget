@@ -7,6 +7,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
+import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.CheckBox
@@ -61,23 +62,6 @@ class MainActivity : Activity() {
                 text = "カレンダーの閲覧を許可する"
                 setOnClickListener { requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR), 1) }
             })
-        } else {
-            body.addView(text("表示するカレンダー", 17f))
-            val hidden = settings.hiddenCalendars.toMutableSet()
-            val calendars = Events.calendars(this)
-            if (calendars.isEmpty()) body.addView(text("カレンダーが見つかりません", 14f, Color.GRAY))
-            for (c in calendars) {
-                body.addView(CheckBox(this).apply {
-                    text = if (c.account.isBlank() || c.account == c.name) c.name else "${c.name}\n${c.account}"
-                    isChecked = c.id !in hidden
-                    setTextColor(Color.parseColor("#202124"))
-                    setOnCheckedChangeListener { _, on ->
-                        if (on) hidden.remove(c.id) else hidden.add(c.id)
-                        settings.hiddenCalendars = hidden
-                        WidgetRenderer.updateAll(this@MainActivity)
-                    }
-                })
-            }
         }
 
         val label = text("文字の大きさ（${settings.textScale}%）", 17f)
@@ -122,5 +106,34 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setOnClickListener { WidgetRenderer.updateAll(this@MainActivity); finish() }
         })
+
+        // 表示するカレンダー（いちばん下。最初は閉じておく）
+        if (Events.hasPermission(this)) {
+            val list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+            val hidden = settings.hiddenCalendars.toMutableSet()
+            val calendars = Events.calendars(this)
+            if (calendars.isEmpty()) list.addView(text("カレンダーが見つかりません", 14f, Color.GRAY))
+            for (c in calendars) {
+                list.addView(CheckBox(this).apply {
+                    text = if (c.account.isBlank() || c.account == c.name) c.name else "${c.name}\n${c.account}"
+                    isChecked = c.id !in hidden
+                    setTextColor(Color.parseColor("#202124"))
+                    setOnCheckedChangeListener { _, on ->
+                        if (on) hidden.remove(c.id) else hidden.add(c.id)
+                        settings.hiddenCalendars = hidden
+                        WidgetRenderer.updateAll(this@MainActivity)
+                    }
+                })
+            }
+            val toggle = text("▶ 表示するカレンダー", 17f)
+            toggle.setPadding(0, dp(20), 0, dp(10))
+            toggle.setOnClickListener {
+                val open = list.visibility != View.VISIBLE
+                list.visibility = if (open) View.VISIBLE else View.GONE
+                toggle.text = if (open) "▼ 表示するカレンダー" else "▶ 表示するカレンダー"
+            }
+            body.addView(toggle)
+            body.addView(list)
+        }
     }
 }

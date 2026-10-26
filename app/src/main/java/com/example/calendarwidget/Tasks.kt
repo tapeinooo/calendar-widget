@@ -37,9 +37,11 @@ object Tasks {
             for (i in 0 until array.length()) {
                 val o = array.getJSONObject(i)
                 val due = LocalDate.parse(o.getString("due"))
-                if (due < from || due > to) continue
-                val begin = due.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                out += Ev(0, "✓ " + o.getString("title"), COLOR, true, begin, begin + 86_400_000L, due, due)
+                // 期限を過ぎた未完了のタスクは、Google カレンダーアプリと同じく今日の列に出す
+                val shownOn = if (due < from) from else due
+                if (shownOn > to) continue
+                val begin = shownOn.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                out += Ev(0, "✓ " + o.getString("title"), COLOR, true, begin, begin + 86_400_000L, shownOn, shownOn)
             }
         }
         return out
@@ -85,6 +87,7 @@ object Tasks {
             ?: return Fetched(out, "タスクのリストが見つかりません")
         var total = 0
         var noDue = 0
+        val dues = ArrayList<String>()
         for (i in 0 until lists.length()) {
             val id = lists.getJSONObject(i).getString("id")
             var page: String? = null
@@ -102,11 +105,12 @@ object Tasks {
                     if (due.length != 10) { noDue++; continue }
                     // 期限は日付だけ（時刻は 0 時 UTC で入っている）なので、日付の部分をそのまま使う
                     out.put(JSONObject().put("title", title).put("due", due))
+                    dues += due
                 }
                 page = json.optString("nextPageToken").takeIf { it.isNotEmpty() }
             } while (page != null)
         }
-        return Fetched(out, "リスト ${lists.length()} 件、未完了のタスク $total 件（期限あり ${total - noDue} 件）")
+        return Fetched(out, "リスト ${lists.length()} 件、未完了のタスク $total 件（期限あり ${total - noDue} 件：${dues.sorted().joinToString("、").ifEmpty { "なし" }}）")
     }
 
     private fun getJson(url: String, token: String): JSONObject {

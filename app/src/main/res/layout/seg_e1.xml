@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/seg"
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_weight="1"
+    android:layout_marginLeft="1dp"
+    android:layout_marginRight="1dp"
+    android:layout_marginTop="1dp"
+    android:gravity="center_vertical|start"
+    android:paddingLeft="3dp"
+    android:paddingRight="1dp"
+    android:paddingTop="1dp"
+    android:paddingBottom="1dp"
+    android:singleLine="true"
+    android:ellipsize="none"
+    android:textColor="#FFFFFFFF" />

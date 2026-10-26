@@ -9,8 +9,11 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 
-/** 1日ぶんの予定の1件。 */
-class Ev(val title: String, val color: Int, val allDay: Boolean, val startMillis: Long)
+/** 予定1件。startDate〜lastDate は表示する日の範囲（終日・複数日の予定もこの範囲で表す）。 */
+class Ev(
+    val id: Long, val title: String, val color: Int, val allDay: Boolean,
+    val begin: Long, val end: Long, val startDate: LocalDate, val lastDate: LocalDate,
+)
 
 class CalendarInfo(val id: Long, val name: String, val account: String, val color: Int)
 
@@ -21,7 +24,7 @@ object Events {
      */
     private val GOOGLE_EVENT_COLORS = mapOf(
         "1" to 0x7986CB, "2" to 0x33B679, "3" to 0x8E24AA, "4" to 0xE67C73, "5" to 0xF6BF26, "6" to 0xF4511E,
-        "7" to 0x039BE5, "8" to 0x616161, "9" to 0x3F51B5, "10" to 0x0B8043, "11" to 0xD50000,
+        "7" to 0x5398CF, "8" to 0x616161, "9" to 0x3F51B5, "10" to 0x0B8043, "11" to 0xD50000,
     ).mapValues { it.value or (0xFF shl 24) }
 
     fun hasPermission(context: Context) =
@@ -46,9 +49,9 @@ object Events {
         return out
     }
 
-    /** from〜to（含む）の日ごとの予定。終日を先に、あとは開始が早い順。権限がなければ空。 */
-    fun load(context: Context, from: LocalDate, to: LocalDate, hidden: Set<Long>): Map<LocalDate, List<Ev>> {
-        if (!hasPermission(context)) return emptyMap()
+    /** from〜to（含む）にかかる予定。権限がなければ空。 */
+    fun load(context: Context, from: LocalDate, to: LocalDate, hidden: Set<Long>): List<Ev> {
+        if (!hasPermission(context)) return emptyList()
         val zone = ZoneId.systemDefault()
         // 終日の予定は UTC の0時で入っているので、前後に1日ずつ広げて取る
         val begin = from.minusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
@@ -57,7 +60,7 @@ object Events {
             android.content.ContentUris.appendId(it, begin)
             android.content.ContentUris.appendId(it, end)
         }.build()
-        val result = HashMap<LocalDate, MutableList<Ev>>()
+        val result = ArrayList<Ev>()
         runCatching {
             context.contentResolver.query(
                 uri,
@@ -66,6 +69,7 @@ object Events {
                     CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.EVENT_COLOR,
                     CalendarContract.Instances.CALENDAR_COLOR, CalendarContract.Instances.CALENDAR_ID,
                     CalendarContract.Instances.SELF_ATTENDEE_STATUS, CalendarContract.Instances.EVENT_COLOR_KEY,
+                    CalendarContract.Instances.EVENT_ID,
                 ),
                 "${CalendarContract.Instances.VISIBLE}=1", null, CalendarContract.Instances.BEGIN,
             )?.use { c ->
@@ -84,17 +88,37 @@ object Events {
                         startDate = Instant.ofEpochMilli(b).atZone(zone).toLocalDate()
                         lastDate = Instant.ofEpochMilli(maxOf(e - 1, b)).atZone(zone).toLocalDate()
                     }
-                    val color = GOOGLE_EVENT_COLORS[c.getString(8)] ?: c.getInt(4).takeIf { it != 0 } ?: c.getInt(5)
-                    val ev = Ev(c.getString(0)?.takeIf { it.isNotBlank() } ?: "（タイトルなし）", color or (0xFF shl 24), allDay, b)
-                    var d = maxOf(startDate, from)
-                    val stop = minOf(lastDate, to)
-                    while (d <= stop) {
-                        result.getOrPut(d) { ArrayList() } += ev
-                        d = d.plusDays(1)
-                    }
+                    if (lastDate < from || startDate > to) continue
+                    val base = c.getInt(4).takeIf { it != 0 } ?: c.getInt(5)
+                    val color = GOOGLE_EVENT_COLORS[c.getString(8)] ?: modernColor(base)
+                    val title = c.getString(0)?.takeIf { it.isNotBlank() } ?: "（タイトルなし）"
+                    result += Ev(c.getLong(9), title, color, allDay, b, e, startDate, lastDate)
                 }
             }
         }
-        return result.mapValues { (_, list) -> list.sortedWith(compareBy<Ev>({ !it.allDay }, { it.startMillis })) }
+        return result
+    }
+
+    /**
+     * 端末の予定データのカレンダーの色は昔の配色（明るい水色など）で入っている。
+     * Google カレンダーアプリは近い色を自分の配色（暗い画面向けに少し落ち着かせたもの）で出すので、
+     * 色相がいちばん近いものに置き換える。
+     */
+    private val MODERN_PALETTE = intArrayOf(
+        0xD50000, 0xE67C73, 0xF4511E, 0xF6BF26, 0x33B679, 0x0B8043, 0x5398CF, 0x3F51B5, 0x7986CB, 0x8E24AA,
+    ).map { it or (0xFF shl 24) }.toIntArray()
+    private val GRAPHITE = 0xFF616161.toInt()
+
+    fun modernColor(color: Int): Int {
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(color, hsv)
+        if (hsv[1] < 0.12f) return GRAPHITE
+        val target = hsv[0]
+        return MODERN_PALETTE.minByOrNull { p ->
+            val ph = FloatArray(3)
+            android.graphics.Color.colorToHSV(p, ph)
+            val d = Math.abs(ph[0] - target)
+            minOf(d, 360f - d)
+        } ?: color
     }
 }

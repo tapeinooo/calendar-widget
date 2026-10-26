@@ -25,6 +25,11 @@ class Settings(context: Context) {
         get() = prefs.getString("tasks_json", "[]")!!
         set(v) = prefs.edit().putString("tasks_json", v).apply()
 
+    /** 最後のタスク取得で見つかった件数の説明（設定画面に出す）。 */
+    var tasksSummary: String
+        get() = prefs.getString("tasks_summary", "")!!
+        set(v) = prefs.edit().putString("tasks_summary", v).apply()
+
     /** 最後のタスク取得の結果（設定画面に出す。空なら成功）。 */
     var tasksError: String
         get() = prefs.getString("tasks_error", "")!!

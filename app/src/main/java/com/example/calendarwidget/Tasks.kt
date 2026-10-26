@@ -61,7 +61,9 @@ object Tasks {
                 settings.tasksError = "許可が必要です。設定画面で「Google タスクと連携する」を押してください。"
                 return false
             }
-            settings.tasksJson = fetch(token).toString()
+            val fetched = fetch(token)
+            settings.tasksJson = fetched.tasks.toString()
+            settings.tasksSummary = fetched.summary
             settings.tasksError = ""
             true
         } catch (e: Exception) {
@@ -70,28 +72,41 @@ object Tasks {
         }
     }
 
-    /** すべてのリストの、未完了で期限のあるタスク（今日の少し前から先 8 週間）。 */
-    private fun fetch(token: String): JSONArray {
-        val today = LocalDate.now()
-        val min = today.minusDays(2).toString() + "T00:00:00.000Z"
-        val max = today.plusDays(56).toString() + "T00:00:00.000Z"
+    /** 取得の結果（保存するタスクと、設定画面に出す件数の説明）。 */
+    private class Fetched(val tasks: JSONArray, val summary: String)
+
+    /**
+     * すべてのリストの未完了のタスク。期限での絞り込みは API に任せず、こちらで行う
+     * （繰り返しなどで期限の入り方が違っても取りこぼさないため）。
+     */
+    private fun fetch(token: String): Fetched {
         val out = JSONArray()
-        val lists = getJson("$API/users/@me/lists?maxResults=100", token).optJSONArray("items") ?: return out
+        val lists = getJson("$API/users/@me/lists?maxResults=100", token).optJSONArray("items")
+            ?: return Fetched(out, "タスクのリストが見つかりません")
+        var total = 0
+        var noDue = 0
         for (i in 0 until lists.length()) {
             val id = lists.getJSONObject(i).getString("id")
-            val url = "$API/lists/${URLEncoder.encode(id, "UTF-8")}/tasks?showCompleted=false&showHidden=false&maxResults=100" +
-                "&dueMin=${URLEncoder.encode(min, "UTF-8")}&dueMax=${URLEncoder.encode(max, "UTF-8")}"
-            val items = getJson(url, token).optJSONArray("items") ?: continue
-            for (j in 0 until items.length()) {
-                val t = items.getJSONObject(j)
-                val due = t.optString("due").take(10)
-                val title = t.optString("title")
-                if (due.length != 10 || title.isBlank() || t.optString("status") == "completed") continue
-                // 期限は日付だけ（時刻は 0 時 UTC で入っている）なので、日付の部分をそのまま使う
-                out.put(JSONObject().put("title", title).put("due", due))
-            }
+            var page: String? = null
+            do {
+                val url = "$API/lists/${URLEncoder.encode(id, "UTF-8")}/tasks?showCompleted=false&showHidden=false&maxResults=100" +
+                    (page?.let { "&pageToken=${URLEncoder.encode(it, "UTF-8")}" } ?: "")
+                val json = getJson(url, token)
+                val items = json.optJSONArray("items")
+                for (j in 0 until (items?.length() ?: 0)) {
+                    val t = items!!.getJSONObject(j)
+                    val title = t.optString("title")
+                    if (title.isBlank() || t.optString("status") == "completed") continue
+                    total++
+                    val due = t.optString("due").take(10)
+                    if (due.length != 10) { noDue++; continue }
+                    // 期限は日付だけ（時刻は 0 時 UTC で入っている）なので、日付の部分をそのまま使う
+                    out.put(JSONObject().put("title", title).put("due", due))
+                }
+                page = json.optString("nextPageToken").takeIf { it.isNotEmpty() }
+            } while (page != null)
         }
-        return out
+        return Fetched(out, "リスト ${lists.length()} 件、未完了のタスク $total 件（期限あり ${total - noDue} 件）")
     }
 
     private fun getJson(url: String, token: String): JSONObject {

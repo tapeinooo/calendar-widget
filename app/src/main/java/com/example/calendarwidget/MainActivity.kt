@@ -152,7 +152,7 @@ class MainActivity : Activity() {
             })
         } else {
             val error = settings.tasksError
-            body.addView(text(if (error.isEmpty()) "連携中" else error, 13f, if (error.isEmpty()) Color.GRAY else Color.RED))
+            body.addView(text(if (error.isEmpty()) "連携中。${settings.tasksSummary.ifEmpty { "まだ取得していません" }}" else error, 13f, if (error.isEmpty()) Color.GRAY else Color.RED))
             body.addView(Button(this).apply {
                 text = "今すぐ更新"
                 setOnClickListener { refreshTasks() }

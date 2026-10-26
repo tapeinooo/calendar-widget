@@ -15,6 +15,21 @@ class Settings(context: Context) {
         get() = prefs.getInt("lane_count", 0)
         set(v) = prefs.edit().putInt("lane_count", v.coerceIn(0, 6)).apply()
 
+    /** Google タスクを出すか。 */
+    var tasksEnabled: Boolean
+        get() = prefs.getBoolean("tasks_enabled", false)
+        set(v) = prefs.edit().putBoolean("tasks_enabled", v).apply()
+
+    /** 取得したタスク（JSON）。描き直しはこれだけを使い、通信はしない。 */
+    var tasksJson: String
+        get() = prefs.getString("tasks_json", "[]")!!
+        set(v) = prefs.edit().putString("tasks_json", v).apply()
+
+    /** 最後のタスク取得の結果（設定画面に出す。空なら成功）。 */
+    var tasksError: String
+        get() = prefs.getString("tasks_error", "")!!
+        set(v) = prefs.edit().putString("tasks_error", v).apply()
+
     /** 表示しないカレンダーの id（新しく増えたカレンダーは表示するため、除く側を覚える）。 */
     var hiddenCalendars: Set<Long>
         get() = prefs.getStringSet("hidden_calendars", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()

@@ -96,6 +96,7 @@ object Events {
                 }
             }
         }
+        result += Tasks.load(context, from, to)
         return result
     }
 

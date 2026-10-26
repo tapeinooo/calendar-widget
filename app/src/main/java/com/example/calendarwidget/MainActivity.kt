@@ -10,6 +10,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import com.google.android.gms.auth.api.identity.Identity
 import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -100,6 +101,8 @@ class MainActivity : Activity() {
             .joinToString { "${WidgetRenderer.reportedHeight(manager, it)}dp" }
         if (heights.isNotEmpty()) body.addView(text("ウィジェットの高さ（ホーム画面の報告）: $heights", 12f, Color.GRAY))
 
+        buildTasksSection()
+
         body.addView(Button(this).apply {
             text = "完了"
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(24) }
@@ -135,5 +138,79 @@ class MainActivity : Activity() {
             body.addView(toggle)
             body.addView(list)
         }
+    }
+
+    // ---- Google タスク ----
+
+    private fun buildTasksSection() {
+        body.addView(text("Google タスク", 17f))
+        if (!settings.tasksEnabled) {
+            body.addView(text("Google カレンダーアプリに出るタスクも、ウィジェットに出せます（読み取りだけ。通信は数時間おきと、この画面で「今すぐ更新」を押したときだけです）。", 13f, Color.GRAY))
+            body.addView(Button(this).apply {
+                text = "Google タスクと連携する"
+                setOnClickListener { authorizeTasks() }
+            })
+        } else {
+            val error = settings.tasksError
+            body.addView(text(if (error.isEmpty()) "連携中" else error, 13f, if (error.isEmpty()) Color.GRAY else Color.RED))
+            body.addView(Button(this).apply {
+                text = "今すぐ更新"
+                setOnClickListener { refreshTasks() }
+            })
+            body.addView(Button(this).apply {
+                text = "連携をやめる"
+                setOnClickListener {
+                    settings.tasksEnabled = false
+                    settings.tasksJson = "[]"
+                    settings.tasksError = ""
+                    WidgetRenderer.updateAll(this@MainActivity)
+                    build()
+                }
+            })
+        }
+    }
+
+    /** 読み取りの許可を求める。まだ許可していなければ Google の許可画面が出る。 */
+    private fun authorizeTasks() {
+        Identity.getAuthorizationClient(this).authorize(Tasks.authorizationRequest())
+            .addOnSuccessListener { result ->
+                val pending = result.pendingIntent
+                if (result.hasResolution() && pending != null) {
+                    startIntentSenderForResult(pending.intentSender, REQUEST_TASKS, null, 0, 0, 0)
+                } else {
+                    onTasksAuthorized()
+                }
+            }
+            .addOnFailureListener { e ->
+                settings.tasksError = "許可できませんでした：${e.message ?: e.javaClass.simpleName}"
+                build()
+            }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_TASKS && resultCode == RESULT_OK) onTasksAuthorized()
+    }
+
+    private fun onTasksAuthorized() {
+        settings.tasksEnabled = true
+        settings.tasksError = ""
+        refreshTasks()
+    }
+
+    private fun refreshTasks() {
+        Thread {
+            Tasks.refresh(applicationContext)
+            runOnUiThread {
+                WidgetRenderer.updateAll(this)
+                build()
+            }
+        }.start()
+        build()
+    }
+
+    companion object {
+        private const val REQUEST_TASKS = 7
     }
 }

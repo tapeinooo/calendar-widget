@@ -18,6 +18,7 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 
 /** 設定画面：予定の権限、表示するカレンダー、文字の大きさ。変えるとすぐウィジェットに反映する。 */
 class MainActivity : Activity() {
@@ -78,6 +79,12 @@ class MainActivity : Activity() {
         body.removeAllViews()
         body.addView(text("たっぴぃずカレンダー", 22f))
         body.addView(text("今日からの1週間を1行に並べて予定を表示します。ホーム画面を長押しして「ウィジェット」から置いてください。", 14f, Color.GRAY))
+
+        // カレンダーもタスクも、いますぐ全部取り直す
+        body.addView(Button(this).apply {
+            text = "カレンダーとタスクをすべて更新"
+            setOnClickListener { refreshTasks() }
+        })
 
         if (!Events.hasPermission(this)) {
             body.addView(text("予定を表示するには、カレンダーの閲覧を許可してください。"))
@@ -240,6 +247,8 @@ class MainActivity : Activity() {
             runOnUiThread {
                 WidgetRenderer.updateAll(this)
                 build()
+                val failed = settings.taskAccounts.any { settings.tasksError(it).isNotEmpty() }
+                Toast.makeText(this, if (failed) "更新しました（タスクの取得でエラーがあります）" else "更新しました", Toast.LENGTH_SHORT).show()
             }
         }.start()
         build()

@@ -69,7 +69,7 @@ class MainActivity : Activity() {
             val line = android.text.SpannableStringBuilder("${c.name}\n")
             line.swatch(c.color).append(" ${hex(c.color)}  番号 ${c.colorKey ?: "なし"}")
             if (fromTable != null) line.append("  表 ").swatch(fromTable).append(" ${hex(fromTable)}")
-            line.append("  ▶ ").swatch(Events.modernColor(c.color))
+            line.append("  ▶ ").swatch(Events.displayColor(null, 0, c.colorKey, c.color))
             box.addView(text("", 13f).apply { text = line })
         }
         for (account in calendars.map { it.account to it.accountType }.distinct()) {
@@ -86,6 +86,7 @@ class MainActivity : Activity() {
             line.swatch(d.eventColor).append(" ${if (d.eventColor == 0) "なし" else hex(d.eventColor)} 番号 ${d.eventKey ?: "なし"}")
             if (d.displayColor != null) line.append(" ／ ").swatch(d.displayColor).append(" ${hex(d.displayColor)}")
             line.append(" ／ ").swatch(d.calColor).append(" 番号 ${d.calKey ?: "なし"}")
+            line.append("  ▶ ").swatch(Events.displayColor(d.eventKey, d.eventColor, d.calKey, d.calColor))
             box.addView(text("", 13f).apply { text = line })
         }
         collapsible("色の確認用", "colors", box)

@@ -19,13 +19,56 @@ class CalendarInfo(val id: Long, val name: String, val account: String, val colo
 
 object Events {
     /**
-     * Google カレンダーで「予定の色」を選んだとき、端末の予定データには昔の配色で入っている。
-     * Google カレンダーアプリは同じ色の名前を新しい配色で出すので、それに合わせる。
+     * Google カレンダーアプリ（暗い画面）で実際に出ている24色。アプリの色の選択画面から測った値。
+     * 端末のデータの色は昔の配色で入っているので、色番号からこの色に置き換える。
      */
-    private val GOOGLE_EVENT_COLORS = mapOf(
-        "1" to 0x7986CB, "2" to 0x33B679, "3" to 0x8E24AA, "4" to 0xE67C73, "5" to 0xF6BF26, "6" to 0xF4511E,
-        "7" to 0x5398CF, "8" to 0x616161, "9" to 0x3F51B5, "10" to 0x0B8043, "11" to 0xD50000,
+    private const val WINE = 0xC45B7C; private const val ROSE = 0xDA5B79; private const val FLAMINGO = 0xD4847B
+    private const val TOMATO = 0xDF573D; private const val TANGERINE = 0xE26B43; private const val PUMPKIN = 0xDB793A
+    private const val MANGO = 0xDE9641; private const val BANANA = 0xE6BB55; private const val CITRON = 0xD8BE61
+    private const val AVOCADO = 0xBCC15A; private const val PISTACHIO = 0x86AD5C; private const val BASIL = 0x4E9364
+    private const val SAGE = 0x59AF80; private const val EUCALYPTUS = 0x479B8E; private const val PEACOCK = 0x5299CF
+    private const val COBALT = 0x6B8CDD; private const val LAVENDER = 0x828CC1; private const val BLUEBERRY = 0x7577C4
+    private const val LILAC = 0xAE9CCC; private const val AMETHYST = 0xA47CB0; private const val GRAPE = 0xAB60BB
+    private const val COCOA = 0x99776B; private const val GRAPHITE = 0x8A8784; private const val BIRCH = 0xA5998B
+
+    private val PALETTE = intArrayOf(
+        WINE, ROSE, FLAMINGO, TOMATO, TANGERINE, PUMPKIN, MANGO, BANANA, CITRON, AVOCADO, PISTACHIO, BASIL,
+        SAGE, EUCALYPTUS, PEACOCK, COBALT, LAVENDER, BLUEBERRY, LILAC, AMETHYST, GRAPE, COCOA, GRAPHITE, BIRCH,
+    ).map { it or (0xFF shl 24) }
+
+    /** 予定の色（番号 1〜11。Google の決まった11色）。 */
+    private val EVENT_COLORS = mapOf(
+        "1" to LAVENDER, "2" to SAGE, "3" to GRAPE, "4" to FLAMINGO, "5" to BANANA, "6" to TANGERINE,
+        "7" to PEACOCK, "8" to GRAPHITE, "9" to BLUEBERRY, "10" to BASIL, "11" to TOMATO,
     ).mapValues { it.value or (0xFF shl 24) }
+
+    /** カレンダーの色（番号 1〜24）。14・8 はアプリの表示と照らして確認済み、ほかは色の名前の順から。 */
+    private val CALENDAR_COLORS = mapOf(
+        "1" to COCOA, "2" to FLAMINGO, "3" to TOMATO, "4" to TANGERINE, "5" to PUMPKIN, "6" to MANGO,
+        "7" to BASIL, "8" to EUCALYPTUS, "9" to PISTACHIO, "10" to AVOCADO, "11" to CITRON, "12" to BANANA,
+        "13" to SAGE, "14" to PEACOCK, "15" to COBALT, "16" to BLUEBERRY, "17" to LAVENDER, "18" to LILAC,
+        "19" to GRAPHITE, "20" to BIRCH, "21" to WINE, "22" to ROSE, "23" to GRAPE, "24" to AMETHYST,
+    ).mapValues { it.value or (0xFF shl 24) }
+
+    /** 予定に出す色：予定の色の番号 → 予定の色（番号なし）→ カレンダーの色の番号 → カレンダーの色、の順に決める。 */
+    fun displayColor(eventKey: String?, eventColor: Int, calKey: String?, calColor: Int): Int =
+        EVENT_COLORS[eventKey]
+            ?: eventColor.takeIf { it != 0 }?.let { nearest(it) }
+            ?: CALENDAR_COLORS[calKey]
+            ?: nearest(calColor)
+
+    /** 番号の分からない色は、24色のうち色相がいちばん近いものにする（色の薄いものはグラファイト）。 */
+    private fun nearest(color: Int): Int {
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(color, hsv)
+        if (hsv[1] < 0.12f) return GRAPHITE or (0xFF shl 24)
+        return PALETTE.minByOrNull { p ->
+            val ph = FloatArray(3)
+            android.graphics.Color.colorToHSV(p, ph)
+            val d = Math.abs(ph[0] - hsv[0])
+            minOf(d, 360f - d) + if (ph[1] < 0.12f) 360f else 0f
+        } ?: color
+    }
 
     fun hasPermission(context: Context) =
         context.checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
@@ -116,7 +159,7 @@ object Events {
                     CalendarContract.Instances.ALL_DAY, CalendarContract.Instances.EVENT_COLOR,
                     CalendarContract.Instances.CALENDAR_COLOR, CalendarContract.Instances.CALENDAR_ID,
                     CalendarContract.Instances.SELF_ATTENDEE_STATUS, CalendarContract.Instances.EVENT_COLOR_KEY,
-                    CalendarContract.Instances.EVENT_ID,
+                    CalendarContract.Instances.EVENT_ID, CalendarContract.Instances.CALENDAR_COLOR_KEY,
                 ),
                 "${CalendarContract.Instances.VISIBLE}=1", null, CalendarContract.Instances.BEGIN,
             )?.use { c ->
@@ -136,8 +179,7 @@ object Events {
                         lastDate = Instant.ofEpochMilli(maxOf(e - 1, b)).atZone(zone).toLocalDate()
                     }
                     if (lastDate < from || startDate > to) continue
-                    val base = c.getInt(4).takeIf { it != 0 } ?: c.getInt(5)
-                    val color = GOOGLE_EVENT_COLORS[c.getString(8)] ?: modernColor(base)
+                    val color = displayColor(c.getString(8), c.getInt(4), c.getString(10), c.getInt(5))
                     val title = c.getString(0)?.takeIf { it.isNotBlank() } ?: "（タイトルなし）"
                     result += Ev(c.getLong(9), title, color, allDay, b, e, startDate, lastDate)
                 }
@@ -145,28 +187,5 @@ object Events {
         }
         result += Tasks.load(context, from, to, LocalDate.now())
         return result
-    }
-
-    /**
-     * 端末の予定データのカレンダーの色は昔の配色（明るい水色など）で入っている。
-     * Google カレンダーアプリは近い色を自分の配色（暗い画面向けに少し落ち着かせたもの）で出すので、
-     * 色相がいちばん近いものに置き換える。
-     */
-    private val MODERN_PALETTE = intArrayOf(
-        0xD50000, 0xE67C73, 0xF4511E, 0xF6BF26, 0x33B679, 0x0B8043, 0x5398CF, 0x3F51B5, 0x7986CB, 0x8E24AA,
-    ).map { it or (0xFF shl 24) }.toIntArray()
-    private val GRAPHITE = 0xFF616161.toInt()
-
-    fun modernColor(color: Int): Int {
-        val hsv = FloatArray(3)
-        android.graphics.Color.colorToHSV(color, hsv)
-        if (hsv[1] < 0.12f) return GRAPHITE
-        val target = hsv[0]
-        return MODERN_PALETTE.minByOrNull { p ->
-            val ph = FloatArray(3)
-            android.graphics.Color.colorToHSV(p, ph)
-            val d = Math.abs(ph[0] - target)
-            minOf(d, 360f - d)
-        } ?: color
     }
 }

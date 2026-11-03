@@ -27,6 +27,9 @@ class CalendarWidgetReceiver : AppWidgetProvider() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
             // 新しい版を入れたとき・日付が変わったとき・予定が変わったときは描き直す
+            // 0時の目覚まし（日付の変わり目の知らせ DATE_CHANGED は、今の Android ではアプリに届かないため）。
+            // 端末の再起動で目覚ましが消えるので、起動時にも描き直して掛け直す
+            MidnightAlarm.ACTION, Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED, Intent.ACTION_DATE_CHANGED, Intent.ACTION_TIME_CHANGED,
             Intent.ACTION_TIMEZONE_CHANGED, Intent.ACTION_PROVIDER_CHANGED -> {
                 WidgetRenderer.updateAll(context)
@@ -39,6 +42,7 @@ class CalendarWidgetReceiver : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) {
         ids.forEach { WidgetRenderer.render(context, manager, it) }
         CalendarWorker.schedulePeriodic(context)
+        MidnightAlarm.schedule(context)
     }
 
     override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) {
@@ -50,6 +54,7 @@ class CalendarWidgetReceiver : AppWidgetProvider() {
     }
 
     override fun onDisabled(context: Context) {
+        MidnightAlarm.cancel(context)
         CalendarWorker.cancelPeriodic(context)
     }
 }
@@ -75,7 +80,10 @@ object WidgetRenderer {
     /** 置かれているすべてのウィジェットを描き直す。 */
     fun updateAll(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
-        manager.getAppWidgetIds(ComponentName(context, CalendarWidgetReceiver::class.java)).forEach { render(context, manager, it) }
+        val ids = manager.getAppWidgetIds(ComponentName(context, CalendarWidgetReceiver::class.java))
+        ids.forEach { render(context, manager, it) }
+        // 描き直すたびに、次の0時の目覚ましを掛け直す（0時の目覚ましで描き直すと、翌日の分が掛かる）
+        if (ids.isNotEmpty()) MidnightAlarm.schedule(context)
     }
 
     /** ウィジェット全体を作って渡す。 */

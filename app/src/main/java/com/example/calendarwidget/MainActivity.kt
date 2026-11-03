@@ -55,6 +55,39 @@ class MainActivity : Activity() {
         setPadding(0, dp(6), 0, dp(6))
     }
 
+    /**
+     * 色の確かめ用：カレンダーごとの色（端末のデータの値・色番号・色の表での値）と、ウィジェットで出す色。
+     * アカウントごとの「予定の色」の表も出す。Google カレンダーアプリの色と見比べて、色の対応を直すのに使う。
+     */
+    private fun colorCheckSection(calendars: List<CalendarInfo>) {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(text("■＝端末のデータの色、▶ の後ろ＝ウィジェットで出す色。Google カレンダーアプリの色と見比べてください。", 13f, Color.GRAY))
+        val tables = HashMap<String, List<Pair<String, Int>>>()
+        for (c in calendars) {
+            val calTable = tables.getOrPut("0|${c.account}|${c.accountType}") { Events.colorTable(this, c.account, c.accountType, 0) }
+            val fromTable = calTable.firstOrNull { it.first == c.colorKey }?.second
+            val line = android.text.SpannableStringBuilder("${c.name}\n")
+            line.swatch(c.color).append(" ${hex(c.color)}  番号 ${c.colorKey ?: "なし"}")
+            if (fromTable != null) line.append("  表 ").swatch(fromTable).append(" ${hex(fromTable)}")
+            line.append("  ▶ ").swatch(Events.modernColor(c.color))
+            box.addView(text("", 13f).apply { text = line })
+        }
+        for (account in calendars.map { it.account to it.accountType }.distinct()) {
+            val table = Events.colorTable(this, account.first, account.second, 1)
+            if (table.isEmpty()) continue
+            val line = android.text.SpannableStringBuilder("予定の色の表（${account.first}）\n")
+            for ((key, color) in table) line.append("$key").swatch(color).append(" ")
+            box.addView(text("", 13f).apply { text = line })
+        }
+        collapsible("色の確認用", "colors", box)
+    }
+
+    private fun hex(color: Int) = String.format("#%06X", color and 0xFFFFFF)
+
+    /** 色の四角を足す。 */
+    private fun android.text.SpannableStringBuilder.swatch(color: Int): android.text.SpannableStringBuilder =
+        append("■", android.text.style.ForegroundColorSpan(color or (0xFF shl 24)), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+
     /** 見出しと、横に並んだ選択肢。選ぶとすぐウィジェットに反映する。 */
     private fun radioRow(title: String, options: List<Pair<Int, String>>, current: Int, onPick: (Int) -> Unit) {
         body.addView(text(title, 17f))
@@ -178,6 +211,7 @@ class MainActivity : Activity() {
                 })
             }
             collapsible("表示するカレンダー", "calendars", list)
+            colorCheckSection(calendars)
         }
     }
 

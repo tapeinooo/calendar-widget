@@ -15,7 +15,7 @@ class Ev(
     val begin: Long, val end: Long, val startDate: LocalDate, val lastDate: LocalDate,
 )
 
-class CalendarInfo(val id: Long, val name: String, val account: String, val color: Int)
+class CalendarInfo(val id: Long, val name: String, val account: String, val color: Int, val colorKey: String?, val accountType: String)
 
 object Events {
     /**
@@ -40,13 +40,32 @@ object Events {
                 arrayOf(
                     CalendarContract.Calendars._ID, CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
                     CalendarContract.Calendars.ACCOUNT_NAME, CalendarContract.Calendars.CALENDAR_COLOR,
+                    CalendarContract.Calendars.CALENDAR_COLOR_KEY, CalendarContract.Calendars.ACCOUNT_TYPE,
                 ),
                 "${CalendarContract.Calendars.VISIBLE}=1", null, CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
             )?.use { c ->
-                while (c.moveToNext()) out += CalendarInfo(c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: "", c.getInt(3))
+                while (c.moveToNext()) out += CalendarInfo(c.getLong(0), c.getString(1) ?: "", c.getString(2) ?: "", c.getInt(3), c.getString(4), c.getString(5) ?: "")
             }
         }
         return out
+    }
+
+    /**
+     * アカウントの色の対応表（色番号 → 色）。type は 0＝カレンダーの色、1＝予定の色。
+     * Google の同期が入れている表で、色の確かめ用に設定画面に出す。
+     */
+    fun colorTable(context: Context, account: String, accountType: String, type: Int): List<Pair<String, Int>> {
+        if (!hasPermission(context)) return emptyList()
+        val out = ArrayList<Pair<String, Int>>()
+        runCatching {
+            context.contentResolver.query(
+                CalendarContract.Colors.CONTENT_URI,
+                arrayOf(CalendarContract.Colors.COLOR_KEY, CalendarContract.Colors.COLOR),
+                "${CalendarContract.Colors.ACCOUNT_NAME}=? AND ${CalendarContract.Colors.ACCOUNT_TYPE}=? AND ${CalendarContract.Colors.COLOR_TYPE}=?",
+                arrayOf(account, accountType, type.toString()), null,
+            )?.use { c -> while (c.moveToNext()) out += (c.getString(0) ?: "") to c.getInt(1) }
+        }
+        return out.sortedBy { it.first.toIntOrNull() ?: Int.MAX_VALUE }
     }
 
     /** from〜to（含む）にかかる予定。権限がなければ空。 */

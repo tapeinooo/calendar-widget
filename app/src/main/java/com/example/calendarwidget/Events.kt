@@ -68,6 +68,34 @@ object Events {
         return out.sortedBy { it.first.toIntOrNull() ?: Int.MAX_VALUE }
     }
 
+    /** 色の確かめ用：from〜to の予定ごとの色の情報（予定名・予定の色・色番号・表示色・カレンダーの色番号）。 */
+    class ColorDebug(val title: String, val eventColor: Int, val eventKey: String?, val displayColor: Int?, val calColor: Int, val calKey: String?)
+
+    fun colorDebug(context: Context, from: LocalDate, to: LocalDate): List<ColorDebug> {
+        if (!hasPermission(context)) return emptyList()
+        val zone = ZoneId.systemDefault()
+        val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
+            android.content.ContentUris.appendId(it, from.atStartOfDay(zone).toInstant().toEpochMilli())
+            android.content.ContentUris.appendId(it, to.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli())
+        }.build()
+        val base = arrayOf(
+            CalendarContract.Instances.TITLE, CalendarContract.Instances.EVENT_COLOR, CalendarContract.Instances.EVENT_COLOR_KEY,
+            CalendarContract.Instances.CALENDAR_COLOR, CalendarContract.Instances.CALENDAR_COLOR_KEY,
+        )
+        fun read(projection: Array<String>): List<ColorDebug> {
+            val out = ArrayList<ColorDebug>()
+            context.contentResolver.query(uri, projection, "${CalendarContract.Instances.VISIBLE}=1", null, CalendarContract.Instances.BEGIN)?.use { c ->
+                while (c.moveToNext()) out += ColorDebug(
+                    c.getString(0) ?: "", c.getInt(1), c.getString(2),
+                    if (projection.size > 5) c.getInt(5) else null, c.getInt(3), c.getString(4),
+                )
+            }
+            return out
+        }
+        // displayColor（予定の色があればそれ、なければカレンダーの色）は端末によってはないので、なければ外して読む
+        return runCatching { read(base + CalendarContract.Instances.DISPLAY_COLOR) }.getOrElse { runCatching { read(base) }.getOrDefault(emptyList()) }
+    }
+
     /** from〜to（含む）にかかる予定。権限がなければ空。 */
     fun load(context: Context, from: LocalDate, to: LocalDate, hidden: Set<Long>): List<Ev> {
         if (!hasPermission(context)) return emptyList()

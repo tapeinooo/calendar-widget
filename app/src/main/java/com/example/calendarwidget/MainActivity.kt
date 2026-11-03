@@ -79,6 +79,15 @@ class MainActivity : Activity() {
             for ((key, color) in table) line.append("$key").swatch(color).append(" ")
             box.addView(text("", 13f).apply { text = line })
         }
+        val today = java.time.LocalDate.now()
+        box.addView(text("この2週間の予定（予定の色・番号／表示色／カレンダーの色・番号）", 15f))
+        for (d in Events.colorDebug(this, today, today.plusDays(13))) {
+            val line = android.text.SpannableStringBuilder("${d.title}\n")
+            line.swatch(d.eventColor).append(" ${if (d.eventColor == 0) "なし" else hex(d.eventColor)} 番号 ${d.eventKey ?: "なし"}")
+            if (d.displayColor != null) line.append(" ／ ").swatch(d.displayColor).append(" ${hex(d.displayColor)}")
+            line.append(" ／ ").swatch(d.calColor).append(" 番号 ${d.calKey ?: "なし"}")
+            box.addView(text("", 13f).apply { text = line })
+        }
         collapsible("色の確認用", "colors", box)
     }
 

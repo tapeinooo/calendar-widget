@@ -32,7 +32,7 @@ object Tasks {
         }.build()
 
     /** 保存してあるタスクのうち、from〜to（含む）に出すものを予定の形で返す（全アカウントぶん）。 */
-    fun load(context: Context, from: LocalDate, to: LocalDate): List<Ev> {
+    fun load(context: Context, from: LocalDate, to: LocalDate, today: LocalDate): List<Ev> {
         val settings = Settings(context)
         val out = ArrayList<Ev>()
         for (account in settings.taskAccounts) runCatching {
@@ -41,8 +41,8 @@ object Tasks {
                 val o = array.getJSONObject(i)
                 val due = LocalDate.parse(o.getString("due"))
                 // 期限を過ぎた未完了のタスクは、Google カレンダーアプリと同じく今日の列に出す
-                val shownOn = if (due < from) from else due
-                if (shownOn > to) continue
+                val shownOn = if (due < today) today else due
+                if (shownOn < from || shownOn > to) continue
                 val begin = shownOn.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
                 out += Ev(0, "✓ " + o.getString("title"), COLOR, true, begin, begin + 86_400_000L, shownOn, shownOn)
             }

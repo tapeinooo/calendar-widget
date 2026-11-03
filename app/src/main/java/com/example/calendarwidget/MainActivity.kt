@@ -55,6 +55,22 @@ class MainActivity : Activity() {
         setPadding(0, dp(6), 0, dp(6))
     }
 
+    /** 見出しと、横に並んだ選択肢。選ぶとすぐウィジェットに反映する。 */
+    private fun radioRow(title: String, options: List<Pair<Int, String>>, current: Int, onPick: (Int) -> Unit) {
+        body.addView(text(title, 17f))
+        body.addView(android.widget.RadioGroup(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            for ((value, label) in options) {
+                addView(android.widget.RadioButton(this@MainActivity).apply {
+                    text = label
+                    isChecked = current == value
+                    setTextColor(Color.parseColor("#202124"))
+                    setOnClickListener { onPick(value); WidgetRenderer.updateAll(this@MainActivity) }
+                })
+            }
+        })
+    }
+
     /** タイトルを押すと開閉する欄。開いているかは再描画しても保つ。 */
     private fun collapsible(title: String, key: String, content: LinearLayout) {
         val toggle = text("", 17f)
@@ -111,7 +127,11 @@ class MainActivity : Activity() {
             })
         })
 
-        body.addView(text("予定の段数", 17f))
+        radioRow("左端の日", listOf(0 to "今日", 1 to "月曜", 2 to "日曜"), settings.startDay) { settings.startDay = it }
+        radioRow("表示する週の数", listOf(1 to "1週", 2 to "2週", 3 to "3週", 4 to "4週"), settings.weeks) { settings.weeks = it }
+        body.addView(text("縦1マスのときは1週だけ。高さが足りないときは入る分だけ出します。", 13f, Color.GRAY))
+
+        body.addView(text("予定の段数（1週あたり）", 17f))
         body.addView(text("「自動」で予定が少なすぎるときは、段数を決めてください（多すぎるとウィジェットの下が切れます）。", 13f, Color.GRAY))
         body.addView(android.widget.RadioGroup(this).apply {
             orientation = LinearLayout.HORIZONTAL

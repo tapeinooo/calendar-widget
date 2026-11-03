@@ -96,7 +96,7 @@ object Events {
                 }
             }
         }
-        result += Tasks.load(context, from, to)
+        result += Tasks.load(context, from, to, LocalDate.now())
         return result
     }
 

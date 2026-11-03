@@ -10,6 +10,16 @@ class Settings(context: Context) {
         get() = prefs.getInt("text_scale", 100)
         set(v) = prefs.edit().putInt("text_scale", v.coerceIn(60, 200)).apply()
 
+    /** 左端の日：0＝今日、1＝月曜、2＝日曜。 */
+    var startDay: Int
+        get() = prefs.getInt("start_day", 0)
+        set(v) = prefs.edit().putInt("start_day", v.coerceIn(0, 2)).apply()
+
+    /** 何週間出すか（高さが足りなければ入る分だけ。縦1マスなら1週）。 */
+    var weeks: Int
+        get() = prefs.getInt("weeks", 1)
+        set(v) = prefs.edit().putInt("weeks", v.coerceIn(1, 4)).apply()
+
     /** 予定の段数（0 なら高さから自動で決める）。 */
     var laneCount: Int
         get() = prefs.getInt("lane_count", 0)

@@ -232,6 +232,7 @@ object WidgetRenderer {
      * （幅や高さには合わせない：予定の文字は右が切れてよい）。予定の段の高さは文字の大きさに合わせ、
      * 高さに入る段の数だけ出す（設定で段数を決めることもできる）。
      * 大きさは dp で指定するので、端末の文字サイズ設定には左右されない。
+     * レイアウトにも標準の 10dp を書いておく（描画時の指定が効かなかったときに、Android の既定の大きな文字にならないように）。
      */
     class Metrics(val unit: Float, val density: Float, val lanes: Int, val weeks: Int) {
         fun dp(dp: Float): Int = (dp * density).toInt()

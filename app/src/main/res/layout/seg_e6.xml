@@ -15,4 +15,5 @@
     android:includeFontPadding="false"
     android:singleLine="true"
     android:ellipsize="none"
-    android:textColor="#FFFFFFFF" />
+    android:textColor="#FFFFFFFF"
+    android:textSize="10dp" />

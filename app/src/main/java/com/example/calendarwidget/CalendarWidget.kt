@@ -8,12 +8,14 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.provider.CalendarContract
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import android.util.TypedValue
 import android.view.View
 import android.widget.RemoteViews
@@ -131,7 +133,10 @@ object WidgetRenderer {
             }
             val h = HEAD_IDS[i]
             val day = if (date.dayOfMonth == 1 || (i == 0 && date != today)) "${date.monthValue}/${date.dayOfMonth}" else "${date.dayOfMonth}"
-            rv.setTextViewText(h, "$day(${"日月火水木金土"[date.dayOfWeek.value % 7]})")
+            val label = SpannableStringBuilder("$day(${"日月火水木金土"[date.dayOfWeek.value % 7]})")
+            // 今日は太字
+            if (date == today) label.setSpan(StyleSpan(Typeface.BOLD), 0, label.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            rv.setTextViewText(h, label)
             rv.setTextColor(h, color)
             rv.setTextViewTextSize(h, TypedValue.COMPLEX_UNIT_DIP, m.unit)
             rv.setViewPadding(h, 0, m.dp(1f), 0, m.dp(1f))

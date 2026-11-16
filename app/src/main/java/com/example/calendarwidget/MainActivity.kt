@@ -156,15 +156,15 @@ class MainActivity : Activity() {
         val label = text("文字の大きさ（${settings.textScale}%）", 17f)
         body.addView(label)
         body.addView(SeekBar(this).apply {
-            max = 140
-            progress = settings.textScale - 60
+            max = 28  // 60〜200% を5%刻み
+            progress = (settings.textScale - 60 + 2) / 5
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(s: SeekBar, p: Int, fromUser: Boolean) {
-                    label.text = "文字の大きさ（${p + 60}%）"
+                    label.text = "文字の大きさ（${p * 5 + 60}%）"
                 }
                 override fun onStartTrackingTouch(s: SeekBar) {}
                 override fun onStopTrackingTouch(s: SeekBar) {
-                    settings.textScale = s.progress + 60
+                    settings.textScale = s.progress * 5 + 60
                     WidgetRenderer.updateAll(this@MainActivity)
                 }
             })

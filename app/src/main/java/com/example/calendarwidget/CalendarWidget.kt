@@ -81,6 +81,7 @@ object WidgetRenderer {
     private val BG_IDS = intArrayOf(R.id.b0, R.id.b1, R.id.b2, R.id.b3, R.id.b4, R.id.b5, R.id.b6)
     private val BLUE_TINT = Color.parseColor("#265B95F2")
     private val RED_TINT = Color.parseColor("#26F2635B")
+    private val TODAY_TINT = Color.parseColor("#33FFFFFF")
 
     /** 置かれているすべてのウィジェットを描き直す。 */
     fun updateAll(context: Context) {
@@ -136,8 +137,8 @@ object WidgetRenderer {
             rv.setViewPadding(h, 0, m.dp(1f), 0, m.dp(1f))
             // 今日は丸く
             rv.setInt(h, "setBackgroundResource", if (date == today) R.drawable.today_bg else 0)
-            // 列の背景：土はうっすら青、日・祝日はうっすら赤（ほかは透明。毎回どちらかを指定する）
-            rv.setInt(BG_IDS[i], "setBackgroundColor", when { holiday -> RED_TINT; saturday -> BLUE_TINT; else -> Color.TRANSPARENT })
+            // 列の背景：今日は白っぽく、土はうっすら青、日・祝日はうっすら赤（ほかは透明。毎回どちらかを指定する）
+            rv.setInt(BG_IDS[i], "setBackgroundColor", when { date == today -> TODAY_TINT; holiday -> RED_TINT; saturday -> BLUE_TINT; else -> Color.TRANSPARENT })
         }
         // 予定の段。入る段数のほかに、まだ予定があるときは次の段も（見切れてもよいので）出し、予定が続いていると分かるようにする
         rv.removeAllViews(R.id.lanes)

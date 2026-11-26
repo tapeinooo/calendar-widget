@@ -14,6 +14,10 @@ class CalendarWorker(context: Context, params: WorkerParameters) : CoroutineWork
         // タスクの取得（通信）はここだけで行い、描き直しは保存した結果を使う
         Tasks.refresh(applicationContext)
         WidgetRenderer.updateAll(applicationContext)
+        // アプリ自身の更新：新しい版があればダウンロードしておき、通知する
+        runCatching {
+            if (Updater.check(applicationContext, download = true)) Updater.notifyIfNeeded(applicationContext)
+        }
         return Result.success()
     }
 

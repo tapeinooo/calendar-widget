@@ -57,6 +57,20 @@ class Settings(context: Context) {
         prefs.edit().remove(key("tasks_json", account)).remove(key("tasks_summary", account)).remove(key("tasks_error", account)).apply()
     }
 
+    /** アプリの更新：GitHub にある新しい版（なければ空）、ダウンロード済みの版、最後の確認のエラー、通知した版。 */
+    var updateAvailable: String
+        get() = prefs.getString("update_available", "")!!
+        set(v) = prefs.edit().putString("update_available", v).apply()
+    var updateDownloaded: String
+        get() = prefs.getString("update_downloaded", "")!!
+        set(v) = prefs.edit().putString("update_downloaded", v).apply()
+    var updateError: String
+        get() = prefs.getString("update_error", "")!!
+        set(v) = prefs.edit().putString("update_error", v).apply()
+    var updateNotified: String
+        get() = prefs.getString("update_notified", "")!!
+        set(v) = prefs.edit().putString("update_notified", v).apply()
+
     /** 表示しないカレンダーの id（新しく増えたカレンダーは表示するため、除く側を覚える）。 */
     var hiddenCalendars: Set<Long>
         get() = prefs.getStringSet("hidden_calendars", emptySet())!!.mapNotNull { it.toLongOrNull() }.toSet()

@@ -41,6 +41,11 @@ class MainActivity : Activity() {
         }
         setContentView(ScrollView(this).apply { addView(body) })
         build()
+        // 開いたときに新しい版を調べ、あればダウンロードしておく
+        Thread {
+            Updater.check(applicationContext, download = true)
+            runOnUiThread { if (!isFinishing && !isDestroyed) build() }
+        }.start()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -136,8 +141,10 @@ class MainActivity : Activity() {
 
     private fun build() {
         body.removeAllViews()
-        body.addView(text("たっぴぃずカレンダー", 22f))
+        body.addView(text("たぺいの予定", 22f))
         body.addView(text("今日からの1週間を1行に並べて予定を表示します。ホーム画面を長押しして「ウィジェット」から置いてください。", 14f, Color.GRAY))
+
+        buildUpdateSection()
 
         // カレンダーもタスクも、いますぐ全部取り直す
         body.addView(Button(this).apply {
@@ -262,6 +269,56 @@ class MainActivity : Activity() {
             else -> "${accounts.size}件連携中"
         }
         collapsible("Google タスク（$state）", "tasks", box)
+    }
+
+    // ---- アプリの更新 ----
+
+    private fun buildUpdateSection() {
+        val installed = Updater.installedVersion(this)
+        val available = settings.updateAvailable
+        val error = settings.updateError
+        val state = when {
+            available.isNotEmpty() && Updater.isReady(this) -> "新しい版 $available があります（ダウンロード済み）"
+            available.isNotEmpty() -> "新しい版 $available があります"
+            error.isNotEmpty() -> error
+            else -> "最新です"
+        }
+        body.addView(text("アプリのバージョン $installed：$state", 13f, if (error.isNotEmpty() && available.isEmpty()) Color.RED else Color.GRAY))
+        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        row.addView(smallButton("更新を確認") { checkUpdate() })
+        if (available.isNotEmpty()) row.addView(smallButton("更新する") { startUpdate() })
+        body.addView(row)
+    }
+
+    private fun checkUpdate() {
+        // 更新の通知を出せるよう、初めてだけ許可を求める
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 9)
+        Toast.makeText(this, "確認しています…", Toast.LENGTH_SHORT).show()
+        Thread {
+            val found = Updater.check(applicationContext, download = true)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                build()
+                if (!found && settings.updateError.isEmpty()) Toast.makeText(this, "最新です", Toast.LENGTH_SHORT).show()
+            }
+        }.start()
+    }
+
+    private fun startUpdate() {
+        Toast.makeText(this, "更新を準備しています…", Toast.LENGTH_SHORT).show()
+        Thread {
+            // まだダウンロードしていなければ、先に落とす
+            if (!Updater.isReady(applicationContext)) Updater.check(applicationContext, download = true)
+            val problem = if (Updater.isReady(applicationContext)) Updater.install(applicationContext)
+            else settings.updateError.ifEmpty { "新しい版を用意できませんでした" }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                build()
+                if (problem != null) Toast.makeText(this, problem, Toast.LENGTH_LONG).show()
+            }
+        }.start()
     }
 
     private fun smallButton(label: String, onClick: () -> Unit) = Button(this).apply {

@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
     <!-- 再起動で目覚ましが消えるので、起動時に掛け直す -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- アプリ自身の更新：新しい版のインストール、更新の通知 -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- ウィジェットのタップで開く Google カレンダー が入っているかを調べるため -->
     <queries>
@@ -31,6 +34,11 @@
                 <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
             </intent-filter>
         </activity>
+
+        <!-- インストールの結果を受ける（アプリの中からだけ呼ばれる） -->
+        <receiver
+            android:name=".InstallResultReceiver"
+            android:exported="false" />
 
         <receiver
             android:name=".CalendarWidgetReceiver"

@@ -14,7 +14,7 @@ https://raw.githubusercontent.com/tapeinooo/app-rules/main/RULES.md を開く）
 
 ## このアプリだけの決まり
 
-- 【例外】署名の鍵は Mac の debug 鍵（app/debug.keystore、パスワード android、別名 androiddebugkey）。Google タスクの読み取りは、この鍵の指紋で Google Cloud に登録してあるので、鍵を変えない。
+- 【例外】署名の鍵は Mac の debug 鍵（app/debug.keystore、パスワード android、別名 androiddebugkey）。公開リポジトリなので鍵そのものは入れず、GitHub の Secret DEBUG_KEYSTORE_B64（base64）に置き、Actions がそこから app/debug.keystore を作る。app/debug.keystore は絶対にコミットしない。Google タスクの読み取りは、この鍵の指紋で Google Cloud に登録してあるので、鍵を変えない。
 - 【例外】版の番号：手で付けていた頃（v1.26・versionCode 27）より大きくするため、gradle.properties の versionOffset=100 と versionMajor=2 を使う（versionName は 2.0.<実行番号>）。
 - 【移行中】v1.26 までのアプリは apk ブランチの APK を見て更新するので、build.yml がリリースのたびに最新の APK を apk ブランチにも置く。みんな v2 になったら、この手順と apk ブランチは消してよい。
 - アプリの更新は Updater.kt（リリースの APK を先にダウンロードしておき、「更新する」で PackageInstaller で入れる。新しい版は通知でも知らせる）。

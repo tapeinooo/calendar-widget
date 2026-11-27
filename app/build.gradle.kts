@@ -3,6 +3,16 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+// 版の番号は GitHub Actions の実行番号から自動で決める（共通ルール）。
+// 手で番号を付けていた頃（v1.26・versionCode 27）より大きくするため、gradle.properties の versionOffset・versionMajor を使う
+val buildNumber = (project.findProperty("buildNumber") as String?)?.toIntOrNull() ?: 1
+val versionOffset = (project.findProperty("versionOffset") as String?)?.toIntOrNull() ?: 0
+val versionMajor = (project.findProperty("versionMajor") as String?)?.toIntOrNull() ?: 1
+val appVersionName = "$versionMajor.0.$buildNumber"
+
+// GitHub Actions がリリースのタグ（v＋versionName）を作るのに使う
+tasks.register("printVersionName") { doLast { println(appVersionName) } }
+
 android {
     namespace = "com.example.calendarwidget"
     compileSdk = 35
@@ -11,15 +21,32 @@ android {
         applicationId = "com.example.calendarwidget"
         minSdk = 26
         targetSdk = 35
-        versionCode = 27
-        versionName = "1.26"
+        versionCode = buildNumber + versionOffset
+        // GitHub のリリースのタグは「v」＋ versionName（アプリの更新はタグで新しい版を見分ける）
+        versionName = appVersionName
+    }
+
+    // 署名：前から使っている Mac の debug 鍵をリポジトリに置いて使う（共通ルール）。
+    // 鍵が変わると、上書きで更新できないうえ、Google タスクの読み取り（鍵の指紋で登録してある）も止まる
+    signingConfigs {
+        create("release") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
-            // 自分のスマホに入れるだけなので、デバッグ版と同じ鍵で署名する（上書きで入れられる）
-            signingConfig = signingConfigs.getByName("debug")
+            // 使っていない部品を削って小さくする
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {

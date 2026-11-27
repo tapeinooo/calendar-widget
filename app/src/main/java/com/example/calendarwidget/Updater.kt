@@ -11,23 +11,21 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings as AndroidSettings
 import android.widget.Toast
-import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * アプリ自身の更新。GitHub（公開リポジトリ）の apk ブランチにある最新の APK を調べて、
+ * アプリ自身の更新。GitHub（公開リポジトリ）の最新のリリース（タグ v＋versionName、添付の .apk）を調べて、
  * 新しければダウンロードしておき、インストールの確認画面まで進める。
  * 確認画面（「更新」を押す）は Android の仕組みで必ず出る。
  */
 object Updater {
     private const val REPO = "tapeinooo/calendar-widget"
-    private const val BRANCH = "apk"
-    private val NAME = Regex("""^calendar-widget-v(\d+(?:\.\d+)*)\.apk$""")
     private const val CHANNEL = "update"
 
-    private class Latest(val version: String, val file: String)
+    private class Latest(val version: String, val url: String)
 
     fun installedVersion(context: Context): String =
         context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0"
@@ -59,21 +57,21 @@ object Updater {
     }
 
     private fun fetchLatest(): Latest? {
-        val c = get("https://api.github.com/repos/$REPO/contents/?ref=$BRANCH")
-        val array = try { JSONArray(c.inputStream.bufferedReader().readText()) } finally { c.disconnect() }
-        var best: Latest? = null
-        for (i in 0 until array.length()) {
-            val name = array.getJSONObject(i).optString("name")
-            val v = NAME.matchEntire(name)?.groupValues?.get(1) ?: continue
-            if (best == null || isNewer(v, best.version)) best = Latest(v, name)
-        }
-        return best
+        val c = get("https://api.github.com/repos/$REPO/releases/latest")
+        val json = try { JSONObject(c.inputStream.bufferedReader().readText()) } finally { c.disconnect() }
+        val tag = json.optString("tag_name").ifEmpty { return null }
+        val assets = json.optJSONArray("assets") ?: return null
+        // 添付の名前は版ごとに変わるので、.apk で終わるものを使う
+        val apk = (0 until assets.length()).map { assets.getJSONObject(it) }
+            .firstOrNull { it.optString("name").endsWith(".apk") } ?: return null
+        return Latest(tag.removePrefix("v"), apk.getString("browser_download_url"))
     }
 
     private fun download(context: Context, latest: Latest) {
         val out = apkFile(context)
         val tmp = File(context.cacheDir, "update.apk.tmp")
-        val c = get("https://raw.githubusercontent.com/$REPO/$BRANCH/${latest.file}")
+        // github.com → 保存場所（https 同士）への転送は HttpURLConnection がたどる
+        val c = get(latest.url)
         try {
             c.inputStream.use { i -> tmp.outputStream().use { o -> i.copyTo(o) } }
         } finally {

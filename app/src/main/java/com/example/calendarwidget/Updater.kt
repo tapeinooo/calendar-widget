@@ -132,7 +132,7 @@ object Updater {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val n = android.app.Notification.Builder(context, CHANNEL)
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.drawable.ic_stat)
             .setContentTitle(context.getString(R.string.app_name))
             .setContentText("新しい版 ${s.updateAvailable} があります。押して更新してください")
             .setContentIntent(open)

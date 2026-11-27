@@ -1,0 +1,14 @@
+<!-- 通知の小さなアイコン（白一色） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="M30,34h48v46h-48z M34,38v38h40v-38z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M30,47h48v4h-48z M41,28h4v12h-4z M63,28h4v12h-4z M52,57h14v14h-14z" />
+</vector>
